@@ -1,0 +1,1228 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset=utf-8/>
+    <title>LOD Movements Dashboard</title>
+    <meta name='viewport' content='initial-scale=1,maximum-scale=1,user-scalable=no'/>
+    <link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+    <link rel="stylesheet" href="css/jquery-ui.css">
+    <link href="style.css" rel="stylesheet">
+    <link href="css/fonti.css" rel="stylesheet">
+
+    <link href="./css/ionrange/ion.rangeSlider.css" rel="stylesheet">
+    <link href="./css/ionrange/ion.rangeSlider.skinNiceInverted.css" rel="stylesheet">
+    <link rel="stylesheet" href="./css/font-awesome.css">
+    <script>if (typeof module === 'object') {
+        window.module = module;
+        module = undefined;
+    }</script>
+
+
+    <script src="./javascript/d3.v4.js"></script>
+    <script src="./javascript/jquery.min.js"></script>
+    <script src="./javascript/jquery-ui.min.js"></script>
+    <script src="./javascript/ion.rangeSlider.min.js" type="application/javascript"></script>
+    <script src="./javascript/moment-with-locales.js"></script>
+
+
+    <!-- We use arc.js to make our paths curved. -->
+    <script src='arc.js'></script>
+    <!-- This is our data file - it's an array of [[lat,lng],[lat,lng]] pairs
+         that define starting and ending locations of flight paths -->
+    <link rel="stylesheet" href="css/leaflet.css"/>
+    <script src="./javascript/leaflet.js"></script>
+
+    <script src="leaflet.polylineDecorator.js"></script>
+    <script src='Leaflet.Arc.min.js'></script>
+    <script src="L.Polyline.SnakeAnim.js"></script>
+    <script src='underscore-min.js'></script>
+
+    <script>if (window.module) module = window.module;</script>
+
+</head>
+<body style="font-family: San_Francisco">
+<div class="about"><i class="fa fa-info-circle" aria-hidden="true"></i></div>
+<div class="play"><i id='play_the_game' class="fa fa-play-circle" aria-hidden="true"></i></div>
+<div id='map' class='dark' watch-paths="false"></div>
+
+
+<div>
+    <input id="place_filter_box" type="text" class="search rounded" placeholder=""
+           style="width: 200px;
+    top: 10px;
+    z-index: 500;
+    right: 440px;
+    position: absolute;
+    background-color: rgba(0,0,0,0.1);
+    height: 10px;color: #000;"/>
+</div>
+
+
+<div id='right_dark_pannel' class=''>
+    <h3>Filter Panel:</h3>
+
+    <div>
+        <input id="entity_filter_box" type="text" class="search rounded" placeholder=""
+               style="width: 220px"/>
+        <div class="clear_search"><i class="fa fa-times-circle" aria-hidden="true"></i></div>
+    </div>
+
+    <span style="color:#bcbcbc;font-size: 12px;vertical-align: middle;margin-right: 8px;padding-top: 8px;">Gender: </span>
+    <div class="dropdown dropdown-dark" style="margin-top: 15px;width: 151px;">
+        <select id="discipline_selector" name="two" class="dropdown-select">
+
+
+        </select>
+    </div>
+    <br/>
+    <span style="color:#bcbcbc;font-size: 12px;vertical-align: middle;margin-right: 8px;padding-top: 8px;">Occupation: </span>
+    <div class="dropdown dropdown-dark" style="margin-top: 15px;width: 184px;">
+        <select id="nation_selector" name="two" class="dropdown-select">
+
+        </select>
+    </div>
+    <br/>
+    <span style="color:#bcbcbc;font-size: 12px;vertical-align: middle;margin-right: 8px;padding-top: 8px;">Country of origin: </span>
+    <div class="dropdown dropdown-dark" style="margin-top: 15px;width: 155px;">
+        <select id="origin_selector" name="two" class="dropdown-select">
+
+        </select>
+    </div>
+    <br/>
+    <span style="color:#bcbcbc;font-size: 12px;vertical-align: middle;margin-right: 8px;padding-top: 8px;">Discipline: </span>
+    <div class="dropdown dropdown-dark" style="margin-top: 15px;width: 205px;">
+        <select id="genre_selector" name="two" class="dropdown-select">
+
+        </select>
+    </div>
+    <!--<br/>
+    <span style="color:#bcbcbc;font-size: 12px;vertical-align: middle;margin-right: 8px;padding-top: 8px;">Places: </span>
+    <div class="dropdown dropdown-dark" style="margin-top: 15px;width: 205px;">
+        <select id="place_selector" name="two" class="dropdown-select">
+
+        </select>
+    </div>-->
+    <div id="contentResults" class="content_result">
+    </div>
+</div>
+
+<div id="snippet_viewer"></div>
+<div style="position: absolute;left: 10px;right: 10px;bottom: 15px">
+    <div id="range_slider"></div>
+</div>
+
+</body>
+
+
+<style>
+    /*
+     * The path-start class is added to each line
+     * to manage its animation - this interpolates
+     * between the starting and ending values for the
+     * stroke-dashoffset css property
+     */
+
+    .path-start {
+        -webkit-transition: stroke-dashoffset 5s ease-in;
+        -moz-transition: stroke-dashoffset 5s ease-in;
+        -o-transition: stroke-dashoffset 5s ease-in;
+        transition: stroke-dashoffset 5s ease-in;
+    }
+</style>
+
+
+<script>
+    const {ipcRenderer,remote, webFrame} = require('electron')
+//    const autoUpdater = remote.autoUpdater
+    const uuidV1 = require('uuid/v1');
+    webFrame.setZoomLevelLimits(1, 1);
+
+
+
+
+
+    if (navigator.onLine) {
+        console.log('online');
+    } else {
+        alert("Internet connection needed to run the application")
+        ipcRenderer.send('exit_app', '')
+    }
+
+    /*
+    try {
+        autoUpdater.on('update-availabe', () => {
+            console.log('update available')
+        })
+        autoUpdater.on('checking-for-update', () => {
+            console.log('checking-for-update')
+        })
+        autoUpdater.on('update-not-available', () => {
+            console.log('update-not-available')
+        })
+        autoUpdater.on('update-downloaded', (e) => {
+            // console.log(e)
+            alert('New version installed! The application will be restarted.')
+            autoUpdater.quitAndInstall()
+
+        })
+    } catch (err) {
+        console.log(err)
+    }
+
+*/
+
+
+    var file_data_path = remote.getGlobal('data_path')
+    var use_external = true
+
+    var map = L.map('map', {
+        'attributionControl': false,
+        'scrollWheelZoom': false
+
+    }).setView([0, 0], 2);
+    var OpenStreetMap_BlackAndWhite = L.tileLayer('http://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', {
+        continuousWorld: false,
+        noWrap: false,
+        maxZoom: 18
+    });
+    OpenStreetMap_BlackAndWhite.addTo(map);
+
+    var info = L.control();
+    var locationLayer = L.featureGroup();
+    var trajectoriesLayer = L.layerGroup();
+    var markerLayer = L.layerGroup();
+
+    var fill = d3.scaleOrdinal(d3.schemeCategory10);
+
+
+    var labelsDis = new Array();
+    var labelsNation = new Array();
+    var labelsOrigin = new Array();
+    var labelsGenre = new Array();
+
+
+    function toTitleCase(str) {
+        return str.replace(/\w\S*/g, function (txt) {
+            return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
+        });
+    }
+
+
+    $('.play').click(function () {
+        console.log("play clicked")
+        $('.bus_stop').each(function () {
+
+            map.flyTo(new L.LatLng(parseFloat(this.getAttribute("latitude")), parseFloat(this.getAttribute("longitude"))), 9);
+
+
+        })
+    });
+
+
+    function refreshGraph(preloaded_list) {
+        var slider = $("#range_slider").data("ionRangeSlider");
+
+        trajectoriesLayer._snakingLayersDone = trajectoriesLayer._snakingLayers.length;
+
+        trajectoriesLayer._snaking = false;
+        trajectoriesLayer.fire('snakeend');
+        //console.log(trajectoriesLayer._snakingLayers.length);
+        brushended(slider.result.from, slider.result.to, preloaded_list)
+    }
+
+
+    function extractData(data) {
+        var dataList = [];
+        var entities_data = {};
+        var locations = {};
+        var trajectoriesArcs = [];
+        var reverse_location = {}
+
+        for (var i = 0; i < data.length; i++) {
+            if (data[i].movements.length > 1) {
+
+                if (data[i].movements.length == 2 && (!use_external && parseInt(data[i].movements[1].date.toString().substr(0, 4)) > 1955)) { //&& parseInt(data[i].movements[1].date.toString().substr(0, 4)) > 1955
+                    console.log("skip: " + data[i].name.toLowerCase())
+                } else {
+
+                    entities_data[data[i].name.toLowerCase()] = data[i];
+                    dataList.push(data[i].name.replace(/_/g, " "));
+
+                    data[i].nation = toTitleCase(data[i].nation)
+
+
+                    labelsDis.push(data[i].discipline);
+                    labelsNation.push(data[i].nation);
+                    labelsOrigin.push(data[i].origin);
+                    labelsGenre.push(data[i].sex);
+
+                    for (var x = 0; x < data[i].movements.length; x++) {
+                        if (x > 0) {
+
+
+                            var source = [data[i].movements[x - 1].latitude, data[i].movements[x - 1].longitude];
+                            var target = [data[i].movements[x].latitude, data[i].movements[x].longitude];
+                            var trajectory_object = {
+                                color: fill(data[i].discipline),
+                                source_date: data[i].movements[x - 1].date,
+                                target_date: data[i].movements[x].date,
+                                source_location_key: data[i].movements[x - 1].latitude + "" + data[i].movements[x - 1].longitude,
+                                target_location_key: data[i].movements[x].latitude + "" + data[i].movements[x].longitude,
+                                entity: data[i].name,
+                                discipline: data[i].discipline,
+                                nation: data[i].nation,
+                                origin: data[i].origin,
+                                gender: data[i].sex,
+                                resource_frame_s: data[i].movements[x - 1].resource_frame,
+                                resource_frame_t: data[i].movements[x].resource_frame,
+                                snippet: data[i].movements[x].snippet
+                            }
+
+
+                            var pair = [source, target, trajectory_object];
+
+
+                            var t1 = pair[0][0] + "" + pair[0][1];
+                            var t1 = pair[0][0] + "" + pair[0][1];
+                            var t2 = pair[1][0] + "" + pair[1][1];
+
+                            if (t1 == t2) {
+                                pair[0][1] += 0.5
+                                pair[0][0] += 0.5
+                            }
+                            //if (t1 != t2) {
+
+
+                            var arco = [pair[0], pair[1], {
+                                color: pair[2].color,
+                                vertices: 80,
+                                offset: 1.8,
+                                weight: 1.5,
+                                opacity: 0.4,
+                                date_source: pair[2].source_date,
+                                date_target: pair[2].target_date,
+                                source_location_key: pair[2].source_location_key,
+                                target_location_key: pair[2].target_location_key,
+                                entity: pair[2].entity,
+                                discipline: pair[2].discipline,
+                                nation: pair[2].nation,
+                                origin: pair[2].origin,
+                                gender: pair[2].gender,
+                                resource_frame_s: pair[2].resource_frame_s,
+                                resource_frame_t: pair[2].resource_frame_t,
+                                snippet: pair[2].snippet,
+                                snakingSpeed: 1000
+                            }];
+
+                            trajectoriesArcs.push(arco);
+
+                            // trajectories.push(pair);
+
+
+                        }
+
+
+                        // console.log( data[i].name + " " +data[i].movements[x].place);
+                        var locationKey = data[i].movements[x].latitude + "" + data[i].movements[x].longitude;
+
+                        //dates.push(data[i].movements[x].date);
+
+
+                        var tmpdata = parseInt((data[i].movements[x].date.toString()).substr(0, 4))
+
+
+                        if (use_external) {
+                            if (min_year == undefined) {
+                                min_year = tmpdata;
+                            }
+                            if (max_year == undefined) {
+                                max_year = tmpdata;
+                            }
+
+                            if (min_year != undefined && tmpdata < min_year) {
+                                min_year = tmpdata;
+                            }
+
+                            if (max_year != undefined && tmpdata > max_year) {
+                                max_year = tmpdata;
+                            }
+                        }
+                        //entities_data[arc.geojson.options.entity.toLowerCase()]
+
+
+                        var circle = L.circleMarker([data[i].movements[x].latitude, data[i].movements[x].longitude], {
+                            color: '#e6e6e6',
+                            fillColor: '#636363',
+                            fillOpacity: 0.5,
+                            weight: 0.5,
+                            place_name: data[i].movements[x].place,
+                            movements: [{
+                                date: data[i].movements[x].date,
+                                entity: data[i].name,
+                                discipline: data[i].discipline,
+                                resource_frame: data[i].movements[x].resource_frame
+                            }],
+                            label_data: [],
+                            entity_data: []
+                        })
+                        reverse_location[data[i].movements[x].place] = locationKey;
+
+                        circle.setRadius(5);
+                        circle.on('mouseover', function (e) {
+                            info.update(this.options);
+                        });
+                        circle.on('mouseout', function (e) {
+                            info.update();
+                        });
+                        circle.on('click', function (e) {
+                            var entities_in_this_circle = [];
+                            for (var m = 0; m < this.options.movements.length; m++) {
+                                entities_in_this_circle.push(this.options.movements[m].entity.toLowerCase());
+                            }
+                            entities_in_this_circle = _.uniq(entities_in_this_circle);
+
+                            refreshGraph(entities_in_this_circle);
+
+                            //info.update();
+                        });
+
+
+                        if (locations[locationKey] == undefined) {
+                            locations[locationKey] = circle;
+                        } else {
+
+                            ///////////////////////////////////////////////////////////////////
+
+                            locations[locationKey].options.movements.push({
+                                date: data[i].movements[x].date,
+                                entity: data[i].name,
+                                discipline: data[i].discipline,
+                                resource_frame: data[i].movements[x].resource_frame
+
+                            });
+                        }
+
+                    }
+                }
+
+            }
+        }
+
+
+        return {
+            dataList: dataList,
+            entities_data: entities_data,
+            locations: locations,
+            trajectoriesArcs: trajectoriesArcs,
+            reverse_location: reverse_location
+        }
+
+    }
+    var locations;
+    var dataList;
+    var entities_data;
+    var trajectoriesArcs;
+    var min_year = undefined;
+    var max_year = undefined;
+    var reverse_location;
+
+    if (!use_external) {
+        min_year = "1900";
+        max_year = "1955";
+    }
+
+    d3.json(file_data_path, function (err, data) {
+
+
+
+            // control that shows state info on hover
+            //----------------- infobox --------------//
+
+
+            info.onAdd = function (map) {
+                this._div = L.DomUtil.create('div', 'info');
+                this.update();
+                return this._div;
+            };
+            info.update = function (props) {
+                var date_entity = "";
+                if (props) {
+                    var appendedData = "";
+                    props.label_data.forEach(function (obj) {
+                        if (!appendedData.includes(obj.date + obj.entity + obj.discipline + obj.resource_frame)) {
+                            // if (parseInt((obj.date.toString()).substr(0, 4)) >= from && parseInt((obj.date.toString()).substr(0, 4)) <= to) {
+                            var year = (obj.date.toString()).substr(0, 4);
+                            var month = "-" + (obj.date.toString()).substr(4, 2);
+                            var day = "-" + (obj.date.toString()).substr(6, 2);
+
+                            if (month == "-00") {
+                                month = "   ";
+                            }
+                            if (day == "-00") {
+                                day = "   ";
+                            }
+
+                            date_entity += "<i style='background:" + fill(obj.discipline) + "'></i>" + year + month + day + "  " + obj.entity.replace(/_/g, " ") + " (" + obj.resource_frame.replace(/_/g, "") + ")<br/>"
+                            appendedData += obj.date + obj.entity + obj.discipline + obj.resource_frame;
+                        }
+                        // }
+                    })
+
+                }
+                this._div.innerHTML = '<h4>Location details</h4>' + (props ?
+                        '<b>' + props.place_name + '</b><br />' + date_entity + ''
+                        : 'Hover on a circle');
+            };
+            info.addTo(map);
+
+            //---------------------------------------//
+
+
+            try {
+                data.length
+            } catch (err) {
+                alert("Error in data.json file")
+                return
+            }
+
+
+            var extractedData = extractData(data);
+
+
+            dataList = extractedData.dataList;
+            entities_data = extractedData.entities_data;
+            locations = extractedData.locations;
+            trajectoriesArcs = extractedData.trajectoriesArcs;
+            reverse_location  = extractedData.reverse_location;
+
+
+            console.log(locations);
+
+            locationLayer.addTo(map);
+            trajectoriesLayer.addTo(map);
+            markerLayer.addTo(map);
+
+
+            //   dates = _.uniq(dates);
+            //////////////////discipline label legend///////////////
+            labelsDis = _.uniq(labelsDis);
+            var legend = L.control({position: 'bottomright'});
+
+
+            legend.onAdd = function (map) {
+                var div = L.DomUtil.create('div', 'info legend')
+                labels = [];
+
+                for (var i = 0; i < labelsDis.length; i++) {
+                    labels.push('<i style="background:' + fill(labelsDis[i]) + '"></i> ' + labelsDis[i]);
+                    disciHTML += '<option value="' + labelsDis[i] + '">' + labelsDis[i] + '</option>'
+                }
+
+                div.innerHTML = labels.join('<br>');
+                return div;
+            };
+            legend.addTo(map);
+
+
+            //////////////////////////////////////////////////////
+
+            $('#discipline_selector').html('');
+            var disciHTML = "<option value=''></option>";
+
+            for (var i = 0; i < labelsDis.length; i++) {
+                labels.push('<i style="background:' + fill(labelsDis[i]) + '"></i> ' + labelsDis[i]);
+                disciHTML += '<option value="' + labelsDis[i] + '">' + labelsDis[i] + '</option>'
+            }
+
+            $('#discipline_selector').html(disciHTML);
+
+            //////////////////////////////////////////////////////
+
+
+            //////////////////discipline label legend///////////////
+
+
+
+            labelsOrigin = _.uniq(labelsOrigin);
+            labelsOrigin.sort();
+
+            $('#origin_selector').html('');
+            var nationHTML = "<option value=''></option>";
+            for (var i = 0; i < labelsOrigin.length; i++) {
+                nationHTML += '<option value="' + labelsOrigin[i] + '">' + labelsOrigin[i] + '</option>'
+            }
+            $('#origin_selector').html(nationHTML);
+
+
+            labelsNation = _.uniq(labelsNation);
+            labelsNation.sort();
+
+
+            $('#nation_selector').html('');
+            var nationHTML = "<option value=''></option>";
+            for (var i = 0; i < labelsNation.length; i++) {
+                nationHTML += '<option value="' + labelsNation[i] + '">' + labelsNation[i] + '</option>'
+            }
+            $('#nation_selector').html(nationHTML);
+
+
+
+            labelsGenre = _.uniq(labelsGenre);
+            labelsGenre.sort();
+
+            $('#genre_selector').html('');
+            var nationHTML = "<option value=''></option>";
+            for (var i = 0; i < labelsGenre.length; i++) {
+                nationHTML += '<option value="' + labelsGenre[i] + '">' + labelsGenre[i] + '</option>'
+            }
+            $('#genre_selector').html(nationHTML);
+
+
+
+            $('#place_selector').html('');
+            var nationHTML = "<option value=''></option>";
+            for (var l_key in locations) {
+                nationHTML += '<option value="' + l_key + '">' + locations[l_key].options.place_name + '</option>'
+
+            }
+            $('#place_selector').html(nationHTML);
+
+
+
+            var loc_lab = []
+            for (var l_key in locations) {
+               loc_lab.push(locations[l_key].options.place_name)
+
+            }
+
+            loc_lab.sort();
+            $("#place_filter_box").autocomplete({
+                source: loc_lab
+            });
+
+
+        //////////////////////////////////////////////////////
+
+
+            /////////// d3 brush configuration seciton ///////////
+            var min_date = undefined;
+            var max_date = undefined;
+
+                /*
+                 dates.forEach(function (d) {
+                 var year = parseInt((d.toString()).substr(0, 4));
+                 if (new Date(year) < min_date || min_date == undefined) {
+                 min_date = new Date(year, 0, 0);
+                 }
+
+                 if (new Date(year) > max_date || max_date == undefined) {
+                 max_date = new Date(year, 0, 0);
+                 }
+                 })
+                 */
+
+            ////////////////forced///////////////////
+            min_date = new Date(min_year, 0, 0);
+            max_date = new Date(max_year, 0, 0);
+            /////////////////////////////////////////
+
+
+            $("#range_slider").ionRangeSlider({
+                type: "double",
+                min: +moment(min_year.toString()).format("YYYY"),
+                max: +moment(max_year.toString()).format("YYYY"),
+                from: +moment(min_year.toString()).format("YYYY"),
+                to: +moment(max_year.toString()).format("YYYY"),
+                drag_interval: true,
+                grid: true,
+                grid_snap: true,
+                force_edges: true,
+                onFinish: function (data) {
+                    brushended(data.from, data.to);
+                }
+            });
+
+            console.log(dataList   )
+            $("#entity_filter_box").autocomplete({
+                source: dataList
+            });
+
+
+            jQuery.fn.d3Click = function () {
+                this.each(function (i, e) {
+                    var evt = new MouseEvent("mouseup");
+                    e.dispatchEvent(evt);
+                });
+            };
+
+            $("#entity_filter_box").keyup(function (e) {
+                if (e.keyCode == 13) {
+                    refreshGraph();
+                }
+            });
+
+            $("#discipline_selector").change(function () {
+                $('#entity_filter_box').val("");
+                var e = document.getElementById("discipline_selector");
+                var discipline_filter_name = e.options[e.selectedIndex].value;
+
+                if (discipline_filter_name.length > 0) {
+                    refreshGraph();
+                }
+            });
+
+
+            $("#nation_selector").change(function () {
+                $('#entity_filter_box').val("");
+                var f = document.getElementById("nation_selector");
+                var nation_filter_name = f.options[f.selectedIndex].value;
+
+                if (nation_filter_name.length > 0) {
+                    refreshGraph();
+                }
+            });
+
+            $("#origin_selector").change(function () {
+                $('#entity_filter_box').val("");
+                var g = document.getElementById("origin_selector");
+                var origin_filter_name = g.options[g.selectedIndex].value;
+
+                if (origin_filter_name.length > 0) {
+                    refreshGraph();
+                }
+            });
+
+            $("#genre_selector").change(function () {
+                $('#entity_filter_box').val("");
+                var s = document.getElementById("genre_selector");
+                var gender_filter_name = s.options[s.selectedIndex].value;
+
+                if (gender_filter_name.length > 0) {
+                    refreshGraph();
+                }
+            });
+
+            $("#place_selector").change(function () {
+                $('#entity_filter_box').val("");
+                var s = document.getElementById("place_selector");
+                var place_filter_name = s.options[s.selectedIndex].value;
+                if (place_filter_name.length > 0) {
+                    let loc = locations[place_filter_name]
+                    var entities_in_this_circle = [];
+                    for (var m = 0; m < loc.options.movements.length; m++) {
+                        entities_in_this_circle.push(loc.options.movements[m].entity.toLowerCase());
+                    }
+                    entities_in_this_circle = _.uniq(entities_in_this_circle);
+
+                    refreshGraph(entities_in_this_circle);
+                }
+            });
+
+            $("#place_filter_box").keyup(function (e) {
+                if (e.keyCode == 13) {
+                    var place_filter_name = $('#place_filter_box').val();
+                    if (place_filter_name.length > 0) {
+
+
+                        let loc = locations[reverse_location[place_filter_name]]
+                        var entities_in_this_circle = [];
+                        for (var m = 0; m < loc.options.movements.length; m++) {
+                            entities_in_this_circle.push(loc.options.movements[m].entity.toLowerCase());
+                        }
+                        entities_in_this_circle = _.uniq(entities_in_this_circle);
+
+                        refreshGraph(entities_in_this_circle);
+                    }
+                }
+            });
+
+
+
+
+
+        map.on('zoomend', function () {
+                locationLayer.eachLayer(function (layer) {
+                    if (map.getZoom() <= 5) {
+                        layer.setRadius(5);
+                    } else {
+                        layer.setRadius(10);
+                    }
+                });
+//                console.log(map.getZoom())
+
+                markerLayer.eachLayer(function (layer) {
+
+                    if (map.getZoom() <= 4) {
+                        layer.setPatterns([
+                            {
+                                offset: '99.9%',
+                                endOffset: '0%',
+                                repeat: '95%',
+                                symbol: L.Symbol.arrowHead({
+                                    pixelSize: 3,
+                                    pathOptions: {
+                                        color: '#000',
+                                        fillOpacity: 1,
+                                        weight: 0
+                                    }
+                                })
+                            }
+                        ])
+                    } else if (map.getZoom() >= 4 && map.getZoom() < 6) {
+                        layer.setPatterns([
+                            {
+                                offset: '99.9%',
+                                endOffset: '0%',
+                                repeat: '95%',
+                                symbol: L.Symbol.arrowHead({
+                                    pixelSize: 6,
+                                    pathOptions: {
+                                        color: '#000',
+                                        fillOpacity: 1,
+                                        weight: 0
+                                    }
+                                })
+                            }
+                        ])
+                    } else {
+                        layer.setPatterns([
+                            {
+                                offset: '99.9%',
+                                endOffset: '0%',
+                                repeat: '95%',
+                                symbol: L.Symbol.arrowHead({
+                                    pixelSize: 8,
+                                    pathOptions: {
+                                        color: '#000',
+                                        fillOpacity: 1,
+                                        weight: 0
+                                    }
+                                })
+                            }
+                        ])
+                    }
+                });
+
+            });
+
+
+            $('.clear_search').click(function () {
+                $('#entity_filter_box').val("");
+                var e = document.getElementById("discipline_selector");
+                var f = document.getElementById("nation_selector");
+                var g = document.getElementById("origin_selector");
+                var s = document.getElementById("genre_selector");
+                var discipline_filter_name = e.options[e.selectedIndex].value;
+                var nation_filter_name = f.options[f.selectedIndex].value;
+                var origin_filter_name = g.options[g.selectedIndex].value;
+                var gender_filter_name = s.options[s.selectedIndex].value;
+
+                //if (discipline_filter_name != "" && nation_filter_name != "") {
+                refreshGraph();
+                // }
+
+            })
+
+        }
+    );
+
+    var current_drawid;
+
+    function brushended(from, to, preloaded_list) {
+
+        var this_run_id = uuidV1()
+
+
+        current_drawid = this_run_id
+
+        map.removeLayer(trajectoriesLayer);
+        map.removeLayer(markerLayer);
+
+
+        var locationPairs = {};
+
+        trajectoriesLayer.clearLayers();
+        map.removeLayer(trajectoriesLayer);
+
+        markerLayer.clearLayers();
+        map.removeLayer(markerLayer);
+
+        trajectoriesLayer = L.layerGroup();
+
+
+        locationLayer.addTo(map);
+        locationLayer.clearLayers();
+
+
+        for (var k in locations) {
+            locations[k].options.label_data = [];
+        }
+
+        var entity_filter_name = $("#entity_filter_box").val().replace(/ /g, "_");
+
+        var e = document.getElementById("discipline_selector");
+        var f = document.getElementById("nation_selector");
+        var g = document.getElementById("origin_selector");
+        var s = document.getElementById("genre_selector");
+        var discipline_filter_name = e.options[e.selectedIndex].value;
+        var nation_filter_name = f.options[f.selectedIndex].value;
+        var origin_filter_name = g.options[g.selectedIndex].value;
+        var gender_filter_name = s.options[s.selectedIndex].value;
+
+
+
+        var entity_retrieved_list = [];
+
+
+        var drawed_arcs = []
+
+        trajectoriesArcs.forEach(function (arco) {
+            //console.log(arco[2]);
+
+            if ((preloaded_list != undefined ? _.contains(preloaded_list, arco[2].entity.toLowerCase()) : true)
+                && (origin_filter_name.length > 0 ? (arco[2].origin.toLowerCase()) == origin_filter_name.toLowerCase() : true)
+                && (gender_filter_name.length > 0 ? (arco[2].gender.toLowerCase()) == gender_filter_name.toLowerCase() : true)
+                && (nation_filter_name.length > 0 ? (arco[2].nation.toLowerCase()) == nation_filter_name.toLowerCase() : true)
+                && (arco[2].entity.toLowerCase()).indexOf(entity_filter_name.toLowerCase()) > -1 && (arco[2].discipline.toLowerCase()).indexOf(discipline_filter_name.toLowerCase()) > -1) {
+
+                if (arco[2].snippet != "null_") {
+                    if (locationPairs[arco[2].source_location_key + "+" + arco[2].target_location_key] == undefined && locationPairs[arco[2].target_location_key + "+" + arco[2].source_location_key] == undefined) {
+                        locationPairs[arco[2].source_location_key + "+" + arco[2].target_location_key] = new Array();
+                    }
+
+                    if (locationPairs[arco[2].source_location_key + "+" + arco[2].target_location_key] != undefined) {
+                        locationPairs[arco[2].source_location_key + "+" + arco[2].target_location_key].push("<i>" + arco[2].entity + "</i> - " + arco[2].snippet + '<br/>')
+                    } else {
+                        locationPairs[arco[2].target_location_key + "+" + arco[2].source_location_key].push("<i>" + arco[2].entity + "</i> - " + arco[2].snippet + '<br/>')
+                    }
+                }
+
+
+                setTimeout(function () {
+
+                    if (this_run_id != current_drawid){
+                        return;
+                    }
+
+
+                    var arc = undefined;
+                    if (parseInt(arco[2].date_source.toString().substr(0, 4)) >= from && parseInt(arco[2].date_target.toString().substr(0, 4)) <= to) {
+
+                        if (!_.contains(drawed_arcs,arco[2].source_location_key + "+" + arco[2].target_location_key)) {
+                            arc = L.Polyline.Arc(arco[0], arco[1], arco[2]);
+
+
+                            arc.geojson.on('mouseover', function (e) {
+
+                                document.getElementById('snippet_viewer').style.backgroundColor = 'rgba(246,245,227,0.7)'
+                                if (locationPairs[arc.geojson.options.source_location_key + "+" + arc.geojson.options.target_location_key] == undefined) {
+                                    $('#snippet_viewer').html("<span class='snippet_close' onclick='$(\"#snippet_viewer\").html(\"\")'>[close]</span><div>"+locationPairs[arc.geojson.options.target_location_key + "+" + arc.geojson.options.source_location_key]+"</div>");
+                                } else {
+                                    $('#snippet_viewer').html("<span class='snippet_close' onclick='$(\"#snippet_viewer\").html(\"\")'>[close]</span><div>"+locationPairs[arc.geojson.options.source_location_key + "+" + arc.geojson.options.target_location_key]+"</div>");
+                                }
+
+                            });
+                        }
+
+                    } else if (parseInt(arco[2].date_target.toString().substr(0, 4)) >= from && parseInt(arco[2].date_target.toString().substr(0, 4)) <= to) {
+
+                        /////////////////////// outside the timespan range //////////////////////////////
+                        if (!_.contains(drawed_arcs,arco[2].source_location_key + "+" + arco[2].target_location_key)) {
+                            arc = L.Polyline.Arc(arco[0], arco[1], arco[2]);
+
+                            arc.geojson.setStyle({
+                                dashArray: '5,5'
+                            });
+
+
+                            arc.geojson.on('mouseover', function (e) {
+
+                                document.getElementById('snippet_viewer').style.backgroundColor = 'rgba(246,245,227,0.7)'
+                                if (locationPairs[arc.geojson.options.source_location_key + "+" + arc.geojson.options.target_location_key] == undefined) {
+                                    $('#snippet_viewer').html("<span class='snippet_close' onclick='$(\"#snippet_viewer\").html(\"\")'>[close]</span><div>"+locationPairs[arc.geojson.options.target_location_key + "+" + arc.geojson.options.source_location_key]+"</div>");
+                                } else {
+                                    $('#snippet_viewer').html("<span class='snippet_close' onclick='$(\"#snippet_viewer\").html(\"\")'>[close]</span><div>"+locationPairs[arc.geojson.options.source_location_key + "+" + arc.geojson.options.target_location_key]+"</div>");
+                                }
+                            });
+                        }
+
+                    }
+
+
+                    if (arc != undefined) {
+
+                        var p_size = 0;
+                        if (map.getZoom() <= 4) {
+                            p_size = 3;
+                        } else if (map.getZoom() >= 4 && map.getZoom() < 6) {
+                            p_size = 6;
+                        } else {
+                            p_size = 8;
+                        }
+
+
+                        arc.geometry.forEach(function (line) {
+                            var markerPatterns = L.polylineDecorator(line, {
+                                patterns: [
+                                    {
+                                        offset: '99.9%',
+                                        endOffset: '0%',
+                                        repeat: '95%',
+                                        symbol: L.Symbol.arrowHead({
+                                            pixelSize: p_size,
+                                            pathOptions: {
+                                                color: '#000',
+                                                fillOpacity: 1,
+                                                weight: 0
+                                            }
+                                        })
+                                    }
+                                ]
+                            });
+                            markerLayer.addLayer(markerPatterns);
+                        })
+
+                        if (!_.contains(drawed_arcs,arco[2].source_location_key + "+" + arco[2].target_location_key)) {
+                            trajectoriesLayer.addTo(map).snakeIn();
+                            trajectoriesLayer.addLayer(arc.geojson);
+                            drawed_arcs.push(arco[2].source_location_key + "+" + arco[2].target_location_key);
+                            drawed_arcs.push(arco[2].target_location_key + "+" + arco[2].source_location_key);
+                        }else{
+                            console.log("already drawed")
+                        }
+                    }
+
+
+                }, 50)
+
+
+                if (parseInt(arco[2].date_source.toString().substr(0, 4)) >= from && parseInt(arco[2].date_target.toString().substr(0, 4)) <= to) {
+
+                    entity_retrieved_list.push(entities_data[arco[2].entity.toLowerCase()]);
+
+
+                    locations[arco[2].source_location_key].options.label_data.push({
+                        date: arco[2].date_source,
+                        entity: arco[2].entity,
+                        discipline: arco[2].discipline,
+                        resource_frame: arco[2].resource_frame_s
+                    });
+                    locations[arco[2].target_location_key].options.label_data.push({
+                        date: arco[2].date_target,
+                        entity: arco[2].entity,
+                        discipline: arco[2].discipline,
+                        resource_frame: arco[2].resource_frame_t
+                    });
+
+                    var circleS = locations[arco[2].source_location_key];
+                    var circleT = locations[arco[2].target_location_key];
+
+
+                    circleS.options.fillColor = '#636363';
+                    circleT.options.fillColor = '#636363';
+                    locationLayer.addLayer(circleS);
+                    locationLayer.addLayer(circleT);
+
+                } else if (parseInt(arco[2].date_target.toString().substr(0, 4)) >= from && parseInt(arco[2].date_target.toString().substr(0, 4)) <= to) {
+
+
+                    entity_retrieved_list.push(entities_data[arco[2].entity.toLowerCase()]);
+
+
+                    locations[arco[2].source_location_key].options.label_data.push({
+                        date: arco[2].date_source,
+                        entity: arco[2].entity,
+                        discipline: arco[2].discipline,
+                        resource_frame: arco[2].resource_frame_s
+                    });
+                    locations[arco[2].target_location_key].options.label_data.push({
+                        date: arco[2].date_target,
+                        entity: arco[2].entity,
+                        discipline: arco[2].discipline,
+                        resource_frame: arco[2].resource_frame_t
+                    });
+
+                    var circleS = locations[arco[2].source_location_key];
+                    var circleT = locations[arco[2].target_location_key];
+
+
+                    circleS.options.fillColor = '#636363';
+                    circleT.options.fillColor = '#636363';
+                    locationLayer.addLayer(circleS);
+                    locationLayer.addLayer(circleT);
+                }
+
+
+            }
+        });
+
+
+        entity_retrieved_list = _.uniq(entity_retrieved_list);
+
+        // console.log(entity_retrieved_list)
+
+        $('#contentResults').html("");
+        $('#contentResults').scrollTop(0);
+        if (entity_retrieved_list.length == 1) {
+            // $('#contentResults').html(JSON.stringify(entity_retrieved_list[0]))
+
+
+            var svg_heigth = entity_retrieved_list[0].movements.length * 30;
+            console.log(entity_retrieved_list[0]);
+            var pieces = entity_retrieved_list[0].work_area.split("/");
+            var wiki_url = "http://digital-library.cdec.it/cdec-web/persone/detail/person-" + pieces[pieces.length-1] +"/"
+            if (entity_retrieved_list[0].work_area.includes('labstoriarovereto')){
+                wiki_url = entity_retrieved_list[0].work_area
+            }
+
+
+            console.log(wiki_url);
+            var htmlinner = "";
+            htmlinner += "<h4 style='margin-left:10px;'><a id='wikiurl' href='" + wiki_url + "' target='_blank' style='color: #fff; text-decoration: none;display: flex;'>" + entity_retrieved_list[0].name.replace(/_/g, " ") + "<img src='images/cdec_i.png' height='18' style='margin-left: 8px' /> </a></h4>";
+            htmlinner += " <svg id='svg_object' width='290' height='" + svg_heigth + "'>'";
+
+
+            var y = 0;
+            var index_m = 0;
+
+
+            var svg_obj = document.getElementById('svg_object');
+
+            entity_retrieved_list[0].movements.forEach(function (movement) {
+
+
+                //  console.log(movement)
+
+                var year = (movement.date.toString()).substr(0, 4);
+                var month = "-" + (movement.date.toString()).substr(4, 2);
+                var day = "-" + (movement.date.toString()).substr(6, 2);
+
+                if (month == "-00") {
+                    month = "   ";
+                }
+                if (day == "-00") {
+                    day = "   ";
+                }
+
+                var snippet = movement.snippet;
+                snippet = snippet.replace(/"/g, "\"");
+                var status = movement.resource_frame.replace("To Nazi Camp","Arrived")
+                var date = year + month + day;
+
+                var group_element = document.createElement('g');
+                group_element.setAttribute("transform", "translate(10," + y + ")")
+
+
+                var lat = movement.latitude;
+                var lon = movement.longitude;
+
+                if (index_m == 0) {
+
+                    htmlinner += '<g class="bus_stop" transform="translate(10,' + y + ')" snippet="' + snippet + '"  latitude="' + lat + '" longitude="' + lon + '" ><path fill="#fff" stroke="#010101" stroke-width="3" d="M22.17,13.5H7.67c-3.314,0-6-2.687-6-6s2.686-6,6-6h14.5	c3.313,0,6,2.687,6,6S25.483,13.5,22.17,13.5z"/>' +
+                        '<line fill="none"  stroke="' + fill(entity_retrieved_list[0].discipline) + '" stroke-width="5.0003" x1="14.92" y1="15.5" x2="14.92" y2="30.5"/>' +
+                        '<text fill="#fff" transform="matrix(1 0 0 1 33.8364 12.166)"><tspan id="birth" x="0" y="0" font-family="\'Roboto\'" font-size="12">' + date + ' in ' + movement.place + '<tspan font-size="12"> ('+status+')</tspan></tspan></text></g>>';
+                    y -= 30;
+                } else if (index_m == entity_retrieved_list[0].movements.length - 1) {
+                    y += 30;
+                    htmlinner += '<g class="bus_stop" transform="translate(10,' + y + ')" snippet="' + snippet + '"  latitude="' + lat + '" longitude="' + lon + '"><path fill="#fff" stroke="#010101" stroke-width="3" d="M22.17,13.5H7.67c-3.314,0-6-2.687-6-6s2.686-6,6-6h14.5	c3.313,0,6,2.687,6,6S25.483,13.5,22.17,13.5z"/>' +
+                        '<text fill="#fff" transform="matrix(1 0 0 1 33.8364 12.166)"><tspan id="birth" x="0" y="0" font-family="\'Roboto\'" font-size="12">' + date.substr(0, 4) + ' in ' + movement.place + '<tspan font-size="12"> ('+status+')</tspan></tspan></text></g>';
+                } else {
+                    htmlinner += '<g class="bus_stop" transform="translate(10,' + y + ')" snippet="' + snippet + '" latitude="' + lat + '" longitude="' + lon + '"><circle fill="#fff" stroke="#010101" stroke-width="3" cx="14.92" cy="38.866" r="6"/>' +
+                        '<text fill="#fff" transform="matrix(1 0 0 1 33.8364 42.166)" font-family="\'Roboto\'" font-size="12">' + date + ' in ' + movement.place + '<tspan font-size="12"> ('+status+')</tspan></text>' +
+                        '<line fill="none" stroke="' + fill(entity_retrieved_list[0].discipline) + '" stroke-width="5.0003" x1="14.92" y1="47" x2="14.92" y2="62"/></g>';
+                }
+
+
+                y += 30;
+                index_m++;
+            })
+
+
+            htmlinner += "</svg>";
+            $('#contentResults').html(htmlinner);
+
+
+
+
+            $('.bus_stop').hover(function () {
+                $('#snippet_viewer').html("<span class='snippet_close' onclick='$(\"#snippet_viewer\").html(\"\")'>[close]</span><div>"+this.getAttribute("snippet")+"</div>");
+                document.getElementById('snippet_viewer').style.backgroundColor = 'rgba(246,245,227,0.7)'
+
+            });
+
+            $('.bus_stop').mouseleave(function () {
+                $('#snippet_viewer').html('');
+                document.getElementById('snippet_viewer').style.backgroundColor = 'rgba(246,245,227,0.7)'
+
+            });
+
+            $('.bus_stop').click(function () {
+                console.log(this)
+                map.flyTo(new L.LatLng(parseFloat(this.getAttribute("latitude")), parseFloat(this.getAttribute("longitude"))), 9);
+            });
+
+
+            //  console.log(svg);
+        } else {
+            function setAndRefresh(name) {
+                $("#entity_filter_box").val(name);
+            }
+
+
+            var htmlinner = document.createElement('div');
+            $(htmlinner).addClass('info-black');
+
+
+            for (var k in entity_retrieved_list) {
+
+                var spanItem = document.createElement('span');
+                $(spanItem).css("cursor", "pointer").attr('entity_name', entity_retrieved_list[k].name).click(function () {
+                    $("#entity_filter_box").val($(this).attr('entity_name'));
+                    refreshGraph();
+                });
+
+                var iconElement = document.createElement('i');
+                $(iconElement).css("background", fill(entity_retrieved_list[k].discipline));
+                $(iconElement).appendTo($(spanItem));
+                $(spanItem).append(entity_retrieved_list[k].name.replace(/_/g, " "));
+
+
+                var br = document.createElement('br');
+
+
+                $(spanItem).appendTo($(htmlinner));
+                $(br).appendTo($(htmlinner));
+
+
+                //  htmlinner += "<span style='cursor: pointer' onclick='$(\"#entity_filter_box\").val(\"" + entity_retrieved_list[k].name + "\");refreshGraph();'><i style='background:" + fill(entity_retrieved_list[k].discipline) + "'></i>  " + entity_retrieved_list[k].name.replace(/_/g, " ") + "</span><br/>";
+            }
+            // htmlinner += "</div>";
+
+            $(htmlinner).appendTo($('#contentResults'));
+
+            //$('#contentResults').html(htmlinner);
+        }
+
+
+        trajectoriesLayer.on('snakeend', function (ev) {
+            markerLayer.addTo(map);
+        });
+
+
+        var SW = locationLayer.getBounds().getSouthWest()
+        var NE = locationLayer.getBounds().getNorthEast()
+
+        if (SW != undefined && NE != undefined) {
+            map.fitBounds([
+                SW, NE
+            ])
+        }
+
+
+    }
+
+
+</script>
+
+<script>require('./main.js')</script>
+</html>

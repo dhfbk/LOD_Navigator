@@ -1,0 +1,42 @@
+{
+  "name": "LOD_Navigator",
+  "version": "1.0.1",
+  "description": "Tracing movements of Italian Shoah victims",
+  "main": "app.js",
+  "productName": "LOD Navigator",
+  "homepage": "http://dh.fbk.eu/technologies/ramble-on",
+  "scripts": {
+    "start": "./node_modules/.bin/electron .",
+    "clean_modules": "rm -rf ./node_modules/*",
+    "clean": "rm -rf ./dist/*",
+    "rebuild": "npm run clean_modules && npm install",
+    "pack": "build --dir",
+    "dist": "npm run clean && npm run dist:mac && npm run dist:win && npm run dist:linux",
+    "dist:mac": "build -m",
+    "dist:win": "build -w squirrel zip --x64",
+    "dist:linux": "build -l deb rpm zip --x64"
+  },
+  "build": {
+    "appId": "eu.fbk.dh",
+    "category": "public.app-category.education",
+    "mac": {
+      "target": "dir"
+    },
+    "win": {
+      "iconUrl": "http://dhlab.fbk.eu/rambleon/icon.ico"
+    }
+  },
+  "author": "DH FBK <Giovanni Moretti - moretti@fbk.eu>",
+  "license": "GPLv3",
+  "devDependencies": {
+    "electron-builder": "^11.3.0",
+    "electron-builder-squirrel-windows": "^11.4.0",
+    "electron-installer-dmg": "^0.2.0",
+    "electron": "^1.3.6",
+    "electron-squirrel-startup": "^1.0.0"
+  },
+  "dependencies": {
+    "electron-squirrel-startup": "^1.0.0",
+    "uuid": "^3.0.1"
+  }
+}

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>LOD Navigator - About</title>
+    <link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+    <link href="css/fonti.css" rel="stylesheet">
+</head>
+<body style="font-family: 'San_Francisco', sans-serif">
+<center>
+    <h1>LOD Navigator</h1>
+    <h3>Tracing movements of Italian Shoah victims</h3>
+    <p style="font-size: 13px">
+        LOD Navigator is a stand-alone application to explore movements of Italian Shoah victims extracted from the Linked Open Data provided by the Contemporary Jewish Documentation Center in Milan (CDEC).
+    </p>
+    <p style="font-size: 11px">Giovanni Moretti - <a href="" onClick="shell.openExternal('http://dh.fbk.eu')">DH Group FBK</a></p>
+    <p style="font-size: 10px">Version - <span id="version"></span></p>
+    <br/>
+    <p style="font-size: 11px"><br />Quest'opera è distribuita con Licenza <a rel="license" href="" onClick="shell.openExternal('https://www.gnu.org/licenses/gpl-3.0.en.html')">GPLv3 -GNU GENERAL PUBLIC LICENSE Version 3</a>.</p>
+</center>
+
+</body>
+<script>
+    const electron = require('electron');
+    const {shell,remote,webFrame} = electron;
+    webFrame.setZoomLevelLimits(1,1);
+
+    var versione = remote.getGlobal('app_version');
+
+    var upath = remote.getGlobal('userData');
+
+    document.getElementById('version').innerHTML =  versione;
+
+
+</script>
+</html>
